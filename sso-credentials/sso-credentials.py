@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import boto3
 import urllib3
 import re
