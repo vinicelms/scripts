@@ -141,6 +141,7 @@ class ECRRepo:
                     digest=image["imageDigest"],
                     tag=image["imageTags"],
                     pushed_at=image["imagePushedAt"],
+                    size_bytes=image["imageSizeInBytes"],
                 )
                 image_list.append(img)
 
@@ -154,10 +155,19 @@ class ECRRepo:
 
 class ECRImage:
 
-    def __init__(self, digest, tags, pushed_at):
+    def __init__(self, digest, tags, pushed_at, size_bytes):
         self.digest = digest
         self.image_tags = tags
         self.pushed_at = pushed_at
+        self.size_bytes = size_bytes
+        self.size_readable = self.readable_size(self.size_bytes)
+
+    def readable_size(self, num):
+        for x in ["bytes", "KB", "MB", "GB"]:
+            if num < 1024.0:
+                return "{:3.1f}{}".format(num, x)
+            num /= 1024.0
+        return "{:3.1f}TB".format(num)
 
 
 @click.command()
