@@ -21,6 +21,14 @@ from collections import namedtuple
 console = Console(log_path=False)
 
 
+def readable_size(num):
+    for x in ["bytes", "KB", "MB", "GB"]:
+        if num < 1024.0:
+            return "{:3.1f}{}".format(num, x)
+        num /= 1024.0
+    return "{:3.1f}TB".format(num)
+
+
 class AWS:
     def __init__(
         self,
@@ -64,7 +72,7 @@ class AWS:
         return self.__session
 
 
-class ECRRepo:
+class ECR:
     def __init__(self, aws_session):
         self.__session = aws_session
 
@@ -116,14 +124,14 @@ class ECRRepo:
         console.log(
             f"ECR repositories founded (based on filter strategy): {len(repo_list_filtered)}"
         )
-        return repo_list_filtered
+        return [ECRRepo(repository_name=repo) for repo in repo_list_filtered]
 
     def list_images(self, repository_name):
         client = self.__session.client("ecr")
         next_token = None
         flag_run = True
         image_list = []
-        console.log(f"Describe images from ECR repository: {repository_name}")
+        # console.log(f"Describe images from ECR repository: {repository_name}")
         while flag_run:
             if not next_token:
                 img_list = client.describe_images(
@@ -136,10 +144,10 @@ class ECRRepo:
                     nextToken=next_token,
                 )
 
-            for image in img_list["imageIds"]:
+            for image in img_list["imageDetails"]:
                 img = ECRImage(
                     digest=image["imageDigest"],
-                    tag=image["imageTags"],
+                    tags=image["imageTags"] if "imageTags" in image else None,
                     pushed_at=image["imagePushedAt"],
                     size_bytes=image["imageSizeInBytes"],
                 )
@@ -150,7 +158,15 @@ class ECRRepo:
             else:
                 flag_run = False
 
-        console.log(f"ECR repository images founded: {len(image_list)}")
+        # console.log(f"ECR repository images founded: {len(image_list)}")
+        return image_list
+
+
+class ECRRepo:
+
+    def __init__(self, repository_name):
+        self.repository_name = repository_name
+        self.images = []
 
 
 class ECRImage:
@@ -160,14 +176,37 @@ class ECRImage:
         self.image_tags = tags
         self.pushed_at = pushed_at
         self.size_bytes = size_bytes
-        self.size_readable = self.readable_size(self.size_bytes)
+        self.size_readable = readable_size(self.size_bytes)
 
-    def readable_size(self, num):
-        for x in ["bytes", "KB", "MB", "GB"]:
-            if num < 1024.0:
-                return "{:3.1f}{}".format(num, x)
-            num /= 1024.0
-        return "{:3.1f}TB".format(num)
+
+class Worker:
+
+    def __init__(self, concurrent_threads):
+        self.concurrent_threads = concurrent_threads
+
+    def run(self, target, content):
+        results = []
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.concurrent_threads
+        ) as executor:
+            futures = [executor.submit(target, cont) for cont in content]
+            for future in concurrent.futures.as_completed(futures):
+                results.append(future.result())
+            return results
+
+
+def multi_thread_images(image):
+    images = image.aws.list_images(image.repo.repository_name)
+    image.repo.images.extend(images)
+    image.table.add_row(
+        image.repo.repository_name,
+        str(len(image.repo.images)),
+        str(readable_size(sum([size.size_bytes for size in image.repo.images]))),
+    )
+    return images
+
+
+Image = namedtuple("Image", ["aws", "repo", "table"])
 
 
 @click.command()
@@ -264,7 +303,20 @@ def migrate(
     #     secret_key=dest_secret_key,
     # ).get_session()
     console.log("List repositories on origin account")
-    ecr = ECRRepo(aws_session=aws_session)
+    ecr = ECR(aws_session=aws_session)
+
+    table = Table(
+        show_header=True,
+        header_style="bold green",
+        show_footer=False,
+        title="ECR Repositories List",
+    )
+    table_centered = Align.center(table)
+
+    headers = ["Repository Name", "Image Quantity", "Image Size"]
+    for header in headers:
+        table.add_column(header, justify="center")
+
     if repo:
         repo_list = ecr.list_repositories(filter_type="common", filter=list(repo))
     elif not_repo:
@@ -279,6 +331,35 @@ def migrate(
         )
     else:
         repo_list = ecr.list_repositories()
+
+    table.row_styles = [
+        Style(bgcolor="gray74", color="black"),
+        Style(bgcolor="gray82", color="black"),
+    ]
+
+    with Live(table_centered, console=console, screen=False, refresh_per_second=20):
+        repo_tuple_list = []
+        for repo in repo_list:
+            repo_tuple_list.append(Image(aws=ecr, repo=repo, table=table))
+
+        worker = Worker(concurrent_threads=10)
+        worker.run(multi_thread_images, repo_tuple_list)
+
+        table.add_row(
+            "Total",
+            str(sum([len(repo.images) for repo in repo_list])),
+            str(
+                readable_size(
+                    sum(
+                        [
+                            sum([size.size_bytes for size in repo.images])
+                            for repo in repo_list
+                        ]
+                    )
+                )
+            ),
+            style="on green",
+        )
 
 
 if __name__ == "__main__":
