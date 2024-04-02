@@ -6,12 +6,14 @@ import re
 import os
 import time
 import socket
+import json
 import webbrowser
 import inquirer
 import logging
 import argparse
 import unidecode
 from configobj import ConfigObj
+from bs4 import BeautifulSoup
 
 logger = logging.getLogger()
 logger.setLevel("INFO")
@@ -37,15 +39,11 @@ def get_region_sso(sso_url):
     else:
         logger.error(req.data)
     req = req.data.decode("utf-8")
-    for line in req.split("\n"):
-        if 'meta name="region"' in line:
-            data = re.search(regex_region, line)
-            if data:
-                logger.info(f"Region was found: {data['region']}")
-                return data["region"]
-            else:
-                logger.error("Any region was found")
-                return None
+    soup = BeautifulSoup(req, "html.parser")
+    region = soup.find(id="awsc-panorama-bundle").get("data-config")
+    region = region.replace("'", "\"")
+    region = json.loads(region)["region"]
+    return region
 
 
 def get_token(client_name, region, sso_url):
