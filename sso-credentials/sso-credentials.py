@@ -40,8 +40,7 @@ def get_region_sso(sso_url):
         logger.error(req.data)
     req = req.data.decode("utf-8")
     soup = BeautifulSoup(req, "html.parser")
-    region = soup.find(id="awsc-panorama-bundle").get("data-config")
-    region = region.replace("'", "\"")
+    region = soup.find(id="env").get_text()
     region = json.loads(region)["region"]
     return region
 
