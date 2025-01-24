@@ -241,12 +241,6 @@ def main(
                     item["instance_pass"],
                 )
 
-    # console.rule(
-    #     title="[bold red]Finish![/bold red]",
-    #     characters="-",
-    #     style="rule.line",
-    #     align="center",
-    # )
     console.log("[green]Finish![/green]")
 
 
