@@ -169,7 +169,6 @@ def main(
         console.log(f"Get EC2 instances by tag: {list(instance_id)}")
         try:
             instance_list = client.describe_instances(InstanceIds=list(instance_id))
-            console.log(instance_list)
         except client.exceptions.ClientError as exc:
             console.log(exc)
             exit(0)
