@@ -186,7 +186,7 @@ def main(
         instance_data = []
         for reservation in instance_list["Reservations"]:
             for instance in reservation["Instances"]:
-                if instance["Platform"] == "windows":
+                if "Platform" in instance and instance["Platform"] == "windows":
                     if instance["State"]["Name"] == "running":
                         windows_instances.append(instance)
                     else:
