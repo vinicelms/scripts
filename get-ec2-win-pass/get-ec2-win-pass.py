@@ -205,8 +205,11 @@ def main(
                     "instance_name": [
                         tag["Value"] for tag in instance["Tags"] if tag["Key"] == "Name"
                     ][0],
+                    "private_ip": instance["PrivateIpAddress"],
                     "instance_user": "Administrator",
-                    "instance_pass": pem.decrypt(base64.b64decode(info["PasswordData"])),
+                    "instance_pass": pem.decrypt(
+                        base64.b64decode(info["PasswordData"])
+                    ),
                 }
                 progress.update(instances_progress, advance=1)
                 instance_data.append(data)
@@ -226,6 +229,7 @@ def main(
         with Live(table_centered, console=console, screen=False, refresh_per_second=20):
             table.add_column("Instance ID", justify="center")
             table.add_column("Name", justify="left")
+            table.add_column("IP Address", justify="left")
             table.add_column("User", justify="left")
             table.add_column("Password", justify="left")
             table.row_styles = [
@@ -236,6 +240,7 @@ def main(
                 table.add_row(
                     item["instance_id"],
                     item["instance_name"],
+                    item["private_ip"],
                     item["instance_user"],
                     item["instance_pass"],
                 )
